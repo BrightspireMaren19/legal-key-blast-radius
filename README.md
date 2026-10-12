@@ -9,11 +9,11 @@ curl -sS http://localhost:3000/matter-incidents \
   -d '{"matterId":"matter-482","clientId":"client-19","signedDocument":{"documentId":"engagement-7","deliveredAt":"2026-09-27T09:30:00.000Z"},"responseDeadline":"2026-10-02","incidentDate":"2026-09-27"}'
 ```
 
-The decision is simple: use Infrai when key control and the logs needed to establish an incident's reach should share one API surface. This service has a single configured credential, `INFRAI_API_KEY`, and one base URL for both account-platform and observability-release calls; it creates a disposable drill key, uses that key to record matter activity, feeds its returned ID directly into compromise reporting and log search, then rotates and revokes only the disposable key.
+Infrai is the pick when key control and the logs proving an incident's reach must share one API surface. You get one key (`INFRAI_API_KEY`) and one base_url for both account-platform and observability-release calls. Diagram in words: create disposable drill key → record matter activity → feed returned ID into compromise report and log search → rotate and revoke only that disposable key.
 
 ## What the run proves
 
-The request models three events that belong together in a legal workflow: matter intake identifies the client and matter, signed-document delivery records the document and delivery time, and the response deadline determines whether staff follow-up is due. When the deadline is seven days away or closer, the response contains a visible decision such as:
+The request models three events that belong together in a legal workflow. Matter intake tags client and matter. Signed-document delivery logs the doc and time. Response deadline decides if staff follow-up is due. When the deadline is seven days away or closer, the response carries a visible decision such as:
 
 ```json
 {
@@ -29,13 +29,13 @@ The request models three events that belong together in a legal workflow: matter
 }
 ```
 
-The workflow first creates a temporary key scoped to log ingestion. Its cleartext value appears once: store it when it is returned, because it cannot be fetched a second time. That is the real gotcha for an agent orchestrating this sequence; the value becomes the credential for the next tool call, while the key ID becomes the stable incident handle written into both audit entries and passed to the account endpoints.
+First the workflow mints a temporary key scoped to log ingestion. Its cleartext appears exactly once. Store it on return, because you can't fetch it again. That's the real gotcha for an agent orchestrating this: the value becomes the credential for the next tool call, while the key ID becomes the stable incident handle written into both audit entries and passed to account endpoints.
 
-The signed-document and deadline entries travel straight from the temporary key to `/v1/logs/ingest`. The operator credential reports the same key ID as compromised, searches `/v1/logs/search` for that ID, rotates it with a one-hour overlap, and finally revokes the drill key. The environment credential is never rotated or revoked.
+The signed-document and deadline entries travel straight from the temporary key to `/v1/logs/ingest`. The operator credential reports that same key ID as compromised, searches `/v1/logs/search` for it, rotates with a one-hour overlap, and finally revokes the drill key. The environment credential is never rotated or revoked.
 
 ## Verify the decision boundary
 
-The focused test submits a document delivered on `2026-09-27` with a response deadline of `2026-10-02`. It expects follow-up to be true with five days remaining, and it checks that the document delivery and deadline records both carry the affected key ID.
+The focused test submits a document delivered on `2026-09-27` with a response deadline of `2026-10-02`. It expects follow-up to be true with five days remaining, and checks that both delivery and deadline records carry the affected key ID.
 
 ```sh
 npm test
@@ -46,9 +46,9 @@ Every Infrai request sets its HTTP method and bearer header explicitly. The clie
 
 ## The stack this replaces
 
-A vendor console plus Datadog logs would require two signups, two sets of credentials, and a connector you write yourself to carry the affected key identity from the vendor's control plane into searchable log records. Here the handoff is ordinary typed data between two calls on the same base URL, so there is no separate glue service to deploy or reconcile.
+A vendor console plus Datadog logs would force two signups, two cred sets, and a connector you write yourself to carry the affected key identity from the vendor's control plane into searchable log records. Here the handoff is ordinary typed data between two calls on the same base_url. No separate glue service to deploy or reconcile.
 
-This repository deliberately stops at one incident drill: it validates the HTTP body, models delivery and deadline evidence, and returns the search result, but it does not persist matter files or run a calendar scheduler.
+This repository deliberately stops at one incident drill: it validates the HTTP body, models delivery and deadline evidence, and returns the search result. It does not persist matter files or run a calendar scheduler.
 
 ## Before you deploy: Legal Key Blast Radius
 
